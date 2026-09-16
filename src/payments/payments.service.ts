@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Payment } from './entities/payment.entity.js';
 import { Project } from '../projects/entities/project.entity.js';
+import { Company } from '../companies/entities/company.entity.js';
 import { CreatePaymentDto } from './dto/create-payment.dto.js';
 import { UpdatePaymentDto } from './dto/update-payment.dto.js';
 import { QueryPaymentDto } from './dto/query-payment.dto.js';
@@ -16,6 +17,8 @@ export class PaymentsService {
     private paymentsRepository: Repository<Payment>,
     @InjectRepository(Project)
     private projectsRepository: Repository<Project>,
+    @InjectRepository(Company)
+    private companiesRepository: Repository<Company>,
   ) {}
 
   async create(projectId: string, createPaymentDto: CreatePaymentDto): Promise<Payment> {
@@ -41,19 +44,34 @@ export class PaymentsService {
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
-  async findAll(query: QueryPaymentDto): Promise<PaginatedResponseDto<Payment>> {
+  async findAll(query: QueryPaymentDto): Promise<PaginatedResponseDto<any>> {
     const { page = 1, limit = 20, projectId, companyId, paymentMethod, dateFrom, dateTo } = query;
     const skip = (page - 1) * limit;
 
-    const qb = this.paymentsRepository.createQueryBuilder('payment');
+    const qb = this.paymentsRepository
+      .createQueryBuilder('payment')
+      .leftJoin(Project, 'project', 'project.id = payment.projectId')
+      .leftJoin(Company, 'company', 'company.id = project.companyId')
+      .select([
+        'payment.id',
+        'payment.projectId',
+        'payment.amount',
+        'payment.paymentDate',
+        'payment.paymentMethod',
+        'payment.reference',
+        'payment.note',
+        'payment.createdAt',
+        'payment.updatedAt',
+      ])
+      .addSelect('project.projectName', 'projectName')
+      .addSelect('company.companyName', 'companyName');
 
     if (projectId) {
       qb.where('payment.projectId = :projectId', { projectId });
     }
 
     if (companyId) {
-      qb.innerJoin(Project, 'project', 'project.id = payment.projectId');
-      qb.andWhere('project.companyId = :companyId', { companyId });
+      qb.andWhere('company.id = :companyId', { companyId });
     }
 
     if (paymentMethod) {
@@ -70,7 +88,48 @@ export class PaymentsService {
 
     qb.orderBy('payment.paymentDate', 'DESC');
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawResults = await qb.offset(skip).limit(limit).getRawMany();
+
+    const totalQb = this.paymentsRepository
+      .createQueryBuilder('payment')
+      .leftJoin(Project, 'project', 'project.id = payment.projectId')
+      .leftJoin(Company, 'company', 'company.id = project.companyId');
+
+    if (projectId) {
+      totalQb.where('payment.projectId = :projectId', { projectId });
+    }
+
+    if (companyId) {
+      totalQb.andWhere('company.id = :companyId', { companyId });
+    }
+
+    if (paymentMethod) {
+      totalQb.andWhere('payment.paymentMethod = :paymentMethod', { paymentMethod });
+    }
+
+    if (dateFrom) {
+      totalQb.andWhere('payment.paymentDate >= :dateFrom', { dateFrom: new Date(dateFrom) });
+    }
+
+    if (dateTo) {
+      totalQb.andWhere('payment.paymentDate <= :dateTo', { dateTo: new Date(dateTo) });
+    }
+
+    const total = await totalQb.getCount();
+
+    const data = rawResults.map((raw) => ({
+      id: raw.payment_id,
+      projectId: raw.payment_projectId,
+      amount: raw.payment_amount,
+      paymentDate: raw.payment_paymentDate,
+      paymentMethod: raw.payment_paymentMethod,
+      reference: raw.payment_reference,
+      note: raw.payment_note,
+      createdAt: raw.payment_createdAt,
+      updatedAt: raw.payment_updatedAt,
+      projectName: raw.projectName || '',
+      companyName: raw.companyName || '',
+    }));
 
     return new PaginatedResponseDto(data, total, page, limit);
   }
