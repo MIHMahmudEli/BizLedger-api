@@ -85,7 +85,7 @@ export class ContactsService {
   }
 
   async findAll(query: QueryContactDto): Promise<PaginatedResponseDto<any>> {
-    const { page = 1, limit = 20, search, companyId } = query;
+    const { page = 1, limit = 20, search, companyId, designation } = query;
     const skip = (page - 1) * limit;
 
     const qb = this.contactsRepository
@@ -107,9 +107,18 @@ export class ContactsService {
       qb.where('contact.companyId = :companyId', { companyId });
     }
 
+    if (designation) {
+      if (companyId) {
+        qb.andWhere('contact.designation = :designation', { designation });
+      } else {
+        qb.where('contact.designation = :designation', { designation });
+      }
+    }
+
     if (search) {
+      const whereClause = companyId || designation ? 'AND' : 'WHERE';
       qb.andWhere(
-        '(contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)',
+        `${whereClause} (contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)`,
         { search: `%${search}%` },
       );
     }
@@ -125,9 +134,18 @@ export class ContactsService {
       totalQb.where('contact.companyId = :companyId', { companyId });
     }
 
+    if (designation) {
+      if (companyId) {
+        totalQb.andWhere('contact.designation = :designation', { designation });
+      } else {
+        totalQb.where('contact.designation = :designation', { designation });
+      }
+    }
+
     if (search) {
+      const whereClause = companyId || designation ? 'AND' : 'WHERE';
       totalQb.andWhere(
-        '(contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)',
+        `${whereClause} (contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)`,
         { search: `%${search}%` },
       );
     }

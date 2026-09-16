@@ -12,4 +12,9 @@ export class QueryContactDto extends PaginationDto {
   @IsOptional()
   @IsString()
   companyId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  designation?: string;
 }
