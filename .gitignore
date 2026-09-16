@@ -1,0 +1,29 @@
+# compiled output
+dist
+
+# dependencies
+node_modules
+
+# env files
+.env
+.env.local
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+npm-debug.log*
+
+# test coverage
+coverage
+
+# build info
+tsconfig.build.tsbuildinfo
