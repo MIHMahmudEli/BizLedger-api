@@ -8,6 +8,7 @@ import {
   ParseUUIDPipe,
   HttpCode,
   HttpStatus,
+  IsEnum,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { UsersService } from '../users/users.service.js';
@@ -15,10 +16,6 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { UserRole } from '../users/entities/user.entity.js';
-
-class UpdateRoleDto {
-  role: UserRole;
-}
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -45,9 +42,9 @@ export class UsersController {
   @ApiResponse({ status: 404, description: 'User not found' })
   async updateRole(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: UpdateRoleDto,
+    @Body('role') role: UserRole,
   ) {
-    const user = await this.usersService.update(id, { role: body.role });
+    const user = await this.usersService.update(id, { role });
     const { passwordHash, ...result } = user as any;
     return { data: result };
   }
