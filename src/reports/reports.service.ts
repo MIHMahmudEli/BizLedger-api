@@ -194,9 +194,9 @@ export class ReportsService {
         'payment.paymentDate',
         'payment.paymentMethod',
         'payment.reference',
-        'project.projectName',
-        'company.companyName',
-      ]);
+      ])
+      .addSelect('project.projectName', 'projectName')
+      .addSelect('company.companyName', 'companyName');
 
     if (dateFrom) {
       qb.andWhere('payment.paymentDate >= :dateFrom', { dateFrom: new Date(dateFrom) });
@@ -220,16 +220,43 @@ export class ReportsService {
 
     qb.orderBy('payment.paymentDate', 'DESC');
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawResults = await qb.offset(skip).limit(limit).getRawMany();
 
-    const items: PaymentReportItemDto[] = data.map((payment: any) => ({
-      id: payment.id,
-      amount: payment.amount,
-      paymentDate: payment.paymentDate,
-      paymentMethod: payment.paymentMethod,
-      reference: payment.reference || '',
-      projectName: payment.project?.projectName || '',
-      companyName: payment.company?.companyName || '',
+    const totalQb = this.paymentsRepository
+      .createQueryBuilder('payment')
+      .leftJoin(Project, 'project', 'project.id = payment.projectId')
+      .leftJoin(Company, 'company', 'company.id = project.companyId');
+
+    if (dateFrom) {
+      totalQb.andWhere('payment.paymentDate >= :dateFrom', { dateFrom: new Date(dateFrom) });
+    }
+
+    if (dateTo) {
+      totalQb.andWhere('payment.paymentDate <= :dateTo', { dateTo: new Date(dateTo) });
+    }
+
+    if (companyId) {
+      totalQb.andWhere('company.id = :companyId', { companyId });
+    }
+
+    if (projectId) {
+      totalQb.andWhere('project.id = :projectId', { projectId });
+    }
+
+    if (paymentMethod) {
+      totalQb.andWhere('payment.paymentMethod = :paymentMethod', { paymentMethod });
+    }
+
+    const total = await totalQb.getCount();
+
+    const items: PaymentReportItemDto[] = rawResults.map((raw) => ({
+      id: raw.payment_id,
+      amount: raw.payment_amount,
+      paymentDate: raw.payment_paymentDate,
+      paymentMethod: raw.payment_paymentMethod,
+      reference: raw.payment_reference || '',
+      projectName: raw.projectName || '',
+      companyName: raw.companyName || '',
     }));
 
     return new PaginatedResponseDto(items, total, page, limit);
