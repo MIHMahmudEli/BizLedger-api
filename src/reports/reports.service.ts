@@ -114,40 +114,38 @@ export class ReportsService {
     const { page = 1, limit = 20, companyId, projectType, dateFrom, dateTo, minDue, maxDue } = query;
     const skip = (page - 1) * limit;
 
-    const qb = this.dataSource
-      .createQueryBuilder()
-      .from((sub) => {
-        return sub
-          .select([
-            'p.id as "id"',
-            'p."projectName" as "projectName"',
-            'p."projectType" as "projectType"',
-            'p."totalValue" as "totalValue"',
-            'c."companyName" as "companyName"',
-          ])
-          .addSelect(
-            'COALESCE((SELECT SUM(pay.amount) FROM payments pay WHERE pay."projectId" = p.id), 0)',
-            '"totalPaid"',
-          )
-          .from(Project, 'p')
-          .innerJoin(Company, 'c', 'c.id = p."companyId"')
-          .where('p."deletedAt" IS NULL');
-      }, 'sub');
+    const qb = this.projectsRepository
+      .createQueryBuilder('project')
+      .leftJoin(Company, 'company', 'company.id = project.companyId')
+      .select([
+        'project.id',
+        'project.projectName',
+        'project.projectType',
+        'project.totalValue',
+        'project.startDate',
+        'project.deadline',
+      ])
+      .addSelect('company.companyName', 'companyName')
+      .addSelect(
+        `(SELECT COALESCE(SUM(pay.amount), 0) FROM payments pay WHERE pay.projectId = project.id)`,
+        'totalPaid',
+      )
+      .where('project.deletedAt IS NULL');
 
     if (companyId) {
-      qb.andWhere('sub."companyId" = :companyId', { companyId });
+      qb.andWhere('company.id = :companyId', { companyId });
     }
 
     if (projectType) {
-      qb.andWhere('sub."projectType" ILIKE :projectType', { projectType: `%${projectType}%` });
+      qb.andWhere('project.projectType ILIKE :projectType', { projectType: `%${projectType}%` });
     }
 
     if (dateFrom) {
-      qb.andWhere('sub."startDate" >= :dateFrom', { dateFrom });
+      qb.andWhere('project.startDate >= :dateFrom', { dateFrom });
     }
 
     if (dateTo) {
-      qb.andWhere('sub.deadline <= :dateTo', { dateTo });
+      qb.andWhere('project.deadline <= :dateTo', { dateTo });
     }
 
     const rawResults = await qb.getRawMany();
@@ -155,8 +153,8 @@ export class ReportsService {
     const projectsWithDue: OutstandingProjectDto[] = [];
 
     for (const raw of rawResults) {
-      const totalValue = parseFloat(raw.totalValue);
-      const totalPaid = parseFloat(raw.totalPaid);
+      const totalValue = parseFloat(raw.project_totalValue || raw.totalValue || '0');
+      const totalPaid = parseFloat(raw.totalPaid || '0');
       const due = totalValue - totalPaid;
       const paymentStatus = calculatePaymentStatus(totalValue, totalPaid);
 
@@ -166,14 +164,14 @@ export class ReportsService {
       if (maxDue !== undefined && due > maxDue) continue;
 
       projectsWithDue.push({
-        id: raw.id,
-        projectName: raw.projectName,
-        projectType: raw.projectType,
+        id: raw.project_id || raw.id,
+        projectName: raw.project_projectName || raw.projectName,
+        projectType: raw.project_projectType || raw.projectType,
         totalValue: totalValue.toFixed(2),
         totalPaid: totalPaid.toFixed(2),
         due: due.toFixed(2),
         paymentStatus,
-        companyName: raw.companyName,
+        companyName: raw.companyName || '',
       });
     }
 
