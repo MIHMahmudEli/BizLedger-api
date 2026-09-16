@@ -32,6 +32,16 @@ export class ContactsService {
     const qb = this.contactsRepository
       .createQueryBuilder('contact')
       .leftJoin(Company, 'company', 'company.id = contact.companyId')
+      .select([
+        'contact.id',
+        'contact.companyId',
+        'contact.name',
+        'contact.designation',
+        'contact.mobile',
+        'contact.email',
+        'contact.createdAt',
+        'contact.updatedAt',
+      ])
       .addSelect('company.companyName', 'companyName')
       .where('contact.companyId = :companyId', { companyId });
 
@@ -44,7 +54,32 @@ export class ContactsService {
 
     qb.orderBy('contact.createdAt', 'DESC');
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawResults = await qb.offset(skip).limit(limit).getRawMany();
+    const totalQb = this.contactsRepository
+      .createQueryBuilder('contact')
+      .leftJoin(Company, 'company', 'company.id = contact.companyId')
+      .where('contact.companyId = :companyId', { companyId });
+
+    if (search) {
+      totalQb.andWhere(
+        '(contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await totalQb.getCount();
+
+    const data = rawResults.map((raw) => ({
+      id: raw.contact_id,
+      companyId: raw.contact_companyId,
+      name: raw.contact_name,
+      designation: raw.contact_designation,
+      mobile: raw.contact_mobile,
+      email: raw.contact_email,
+      createdAt: raw.contact_createdAt,
+      updatedAt: raw.contact_updatedAt,
+      companyName: raw.companyName || null,
+    }));
 
     return new PaginatedResponseDto(data, total, page, limit);
   }
@@ -56,6 +91,16 @@ export class ContactsService {
     const qb = this.contactsRepository
       .createQueryBuilder('contact')
       .leftJoin(Company, 'company', 'company.id = contact.companyId')
+      .select([
+        'contact.id',
+        'contact.companyId',
+        'contact.name',
+        'contact.designation',
+        'contact.mobile',
+        'contact.email',
+        'contact.createdAt',
+        'contact.updatedAt',
+      ])
       .addSelect('company.companyName', 'companyName');
 
     if (companyId) {
@@ -71,7 +116,35 @@ export class ContactsService {
 
     qb.orderBy('contact.createdAt', 'DESC');
 
-    const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
+    const rawResults = await qb.offset(skip).limit(limit).getRawMany();
+    const totalQb = this.contactsRepository
+      .createQueryBuilder('contact')
+      .leftJoin(Company, 'company', 'company.id = contact.companyId');
+
+    if (companyId) {
+      totalQb.where('contact.companyId = :companyId', { companyId });
+    }
+
+    if (search) {
+      totalQb.andWhere(
+        '(contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)',
+        { search: `%${search}%` },
+      );
+    }
+
+    const total = await totalQb.getCount();
+
+    const data = rawResults.map((raw) => ({
+      id: raw.contact_id,
+      companyId: raw.contact_companyId,
+      name: raw.contact_name,
+      designation: raw.contact_designation,
+      mobile: raw.contact_mobile,
+      email: raw.contact_email,
+      createdAt: raw.contact_createdAt,
+      updatedAt: raw.contact_updatedAt,
+      companyName: raw.companyName || null,
+    }));
 
     return new PaginatedResponseDto(data, total, page, limit);
   }
