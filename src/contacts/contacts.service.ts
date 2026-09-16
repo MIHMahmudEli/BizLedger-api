@@ -63,9 +63,8 @@ export class ContactsService {
     }
 
     if (search) {
-      const whereClause = companyId ? 'AND' : 'WHERE';
       qb.andWhere(
-        `${whereClause} (contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)`,
+        '(contact.name ILIKE :search OR contact.designation ILIKE :search OR contact.mobile ILIKE :search OR contact.email ILIKE :search OR company.companyName ILIKE :search)',
         { search: `%${search}%` },
       );
     }
