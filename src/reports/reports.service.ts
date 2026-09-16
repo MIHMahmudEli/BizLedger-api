@@ -189,8 +189,8 @@ export class ReportsService {
 
     const qb = this.paymentsRepository
       .createQueryBuilder('payment')
-      .innerJoin('payment.project', 'project')
-      .innerJoin('project.company', 'company')
+      .leftJoin(Project, 'project', 'project.id = payment.projectId')
+      .leftJoin(Company, 'company', 'company.id = project.companyId')
       .select([
         'payment.id',
         'payment.amount',
