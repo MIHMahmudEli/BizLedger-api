@@ -127,10 +127,9 @@ export class ReportsService {
       ])
       .addSelect('company.companyName', 'companyName')
       .addSelect(
-        `(SELECT COALESCE(SUM(pay.amount), 0) FROM payments pay WHERE pay.projectId = project.id)`,
+        `(SELECT COALESCE(SUM(pay.amount), 0) FROM payments pay WHERE pay."projectId" = project.id)`,
         'totalPaid',
-      )
-      .where('project.deletedAt IS NULL');
+      );
 
     if (companyId) {
       qb.andWhere('company.id = :companyId', { companyId });
