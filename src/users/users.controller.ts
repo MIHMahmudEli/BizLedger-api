@@ -3,6 +3,7 @@ import {
   Get,
   Post,
   Patch,
+  Delete,
   Param,
   Body,
   UseGuards,
@@ -77,5 +78,16 @@ export class UsersController {
     const user = await this.usersService.update(id, { role });
     const { passwordHash, ...result } = user as any;
     return { data: result };
+  }
+
+  @Delete(':id')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a user (admin only)' })
+  @ApiResponse({ status: 200, description: 'User deleted successfully' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async remove(@Param('id', ParseUUIDPipe) id: string) {
+    await this.usersService.remove(id);
+    return { message: 'User deleted successfully' };
   }
 }
