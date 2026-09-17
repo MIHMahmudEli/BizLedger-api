@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import * as bcrypt from 'bcrypt';
@@ -77,6 +78,22 @@ export class UsersController {
   ) {
     const user = await this.usersService.update(id, { role });
     const { passwordHash, ...result } = user as any;
+    return { data: result };
+  }
+
+  @Patch(':id/status')
+  @Roles(UserRole.ADMIN)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Toggle user active status (admin only)' })
+  @ApiResponse({ status: 200, description: 'User status updated' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  async toggleStatus(@Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.usersService.findOne(id);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    const updated = await this.usersService.update(id, { isActive: !user.isActive });
+    const { passwordHash, ...result } = updated as any;
     return { data: result };
   }
 
