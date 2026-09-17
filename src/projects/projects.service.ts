@@ -9,6 +9,11 @@ import { ProjectFinancialDto } from './dto/project-finance.dto.js';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto.js';
 import { UserRole } from '../users/entities/user.entity.js';
 import { Payment } from '../payments/entities/payment.entity.js';
+import { Company } from '../companies/entities/company.entity.js';
+import { User } from '../users/entities/user.entity.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsGateway } from '../notifications/notifications.gateway.js';
+import { NotificationType } from '../notifications/entities/notification.entity.js';
 
 export type ProjectStatusType = 'UNPAID' | 'PARTIALLY_PAID' | 'PAID' | 'OVERPAID';
 
@@ -26,6 +31,12 @@ export class ProjectsService {
     private projectsRepository: Repository<Project>,
     @InjectRepository(Payment)
     private paymentsRepository: Repository<Payment>,
+    @InjectRepository(Company)
+    private companiesRepository: Repository<Company>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    private notificationsService: NotificationsService,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(companyId: string, createProjectDto: CreateProjectDto): Promise<Project> {
@@ -34,7 +45,28 @@ export class ProjectsService {
       companyId,
       totalValue: String(createProjectDto.totalValue),
     });
-    return this.projectsRepository.save(project);
+    const savedProject = await this.projectsRepository.save(project);
+
+    const company = await this.companiesRepository.findOne({ where: { id: companyId } });
+    const adminUsers = await this.usersRepository.find({
+      where: { role: UserRole.ADMIN },
+    });
+
+    if (adminUsers.length > 0) {
+      const notification = await this.notificationsService.create({
+        userId: adminUsers[0].id,
+        type: NotificationType.PROJECT_CREATED,
+        title: 'New Project Created',
+        message: `Project "${createProjectDto.projectName}" created${company ? ` for ${company.companyName}` : ''}`,
+        link: `/projects/${savedProject.id}`,
+      });
+
+      for (const user of adminUsers) {
+        await this.notificationsGateway.sendNotification(user.id, notification);
+      }
+    }
+
+    return savedProject;
   }
 
   async findAll(query: QueryProjectDto): Promise<PaginatedResponseDto<Project>> {
@@ -119,13 +151,45 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
+    const oldStatus = project.status;
     const updateData: any = { ...updateProjectDto };
     if (updateProjectDto.totalValue !== undefined) {
       updateData.totalValue = String(updateProjectDto.totalValue);
     }
 
     Object.assign(project, updateData);
-    return this.projectsRepository.save(project);
+    const savedProject = await this.projectsRepository.save(project);
+
+    if (updateProjectDto.status && updateProjectDto.status !== oldStatus) {
+      const company = await this.companiesRepository.findOne({ where: { id: savedProject.companyId } });
+      const adminManagerUsers = await this.usersRepository.find({
+        where: [{ role: UserRole.ADMIN }, { role: UserRole.MANAGER }],
+      });
+
+      const statusLabels: Record<string, string> = {
+        PLANNED: 'Planned',
+        IN_PROGRESS: 'In Progress',
+        ON_HOLD: 'On Hold',
+        COMPLETED: 'Completed',
+        CANCELLED: 'Cancelled',
+      };
+
+      if (adminManagerUsers.length > 0) {
+        const notification = await this.notificationsService.create({
+          userId: adminManagerUsers[0].id,
+          type: NotificationType.PROJECT_STATUS_CHANGED,
+          title: 'Project Status Changed',
+          message: `Project "${savedProject.projectName}" status changed to "${statusLabels[updateProjectDto.status] || updateProjectDto.status}"${company ? ` (${company.companyName})` : ''}`,
+          link: `/projects/${savedProject.id}`,
+        });
+
+        for (const user of adminManagerUsers) {
+          await this.notificationsGateway.sendNotification(user.id, notification);
+        }
+      }
+    }
+
+    return savedProject;
   }
 
   async remove(id: string, userRole: UserRole): Promise<void> {

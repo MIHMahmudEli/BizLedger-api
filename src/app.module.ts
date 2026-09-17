@@ -9,6 +9,7 @@ import { ContactsModule } from './contacts/contacts.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { ReportsModule } from './reports/reports.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RolesGuard } from './common/guards/roles.guard.js';
 
@@ -35,6 +36,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     ProjectsModule,
     PaymentsModule,
     ReportsModule,
+    NotificationsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

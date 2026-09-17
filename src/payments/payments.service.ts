@@ -9,6 +9,10 @@ import { UpdatePaymentDto } from './dto/update-payment.dto.js';
 import { QueryPaymentDto } from './dto/query-payment.dto.js';
 import { PaginatedResponseDto } from '../common/dto/pagination.dto.js';
 import { UserRole } from '../users/entities/user.entity.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsGateway } from '../notifications/notifications.gateway.js';
+import { NotificationType } from '../notifications/entities/notification.entity.js';
+import { User } from '../users/entities/user.entity.js';
 
 @Injectable()
 export class PaymentsService {
@@ -19,6 +23,10 @@ export class PaymentsService {
     private projectsRepository: Repository<Project>,
     @InjectRepository(Company)
     private companiesRepository: Repository<Company>,
+    @InjectRepository(User)
+    private usersRepository: Repository<User>,
+    private notificationsService: NotificationsService,
+    private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(projectId: string, createPaymentDto: CreatePaymentDto): Promise<Payment> {
@@ -28,7 +36,29 @@ export class PaymentsService {
       amount: String(createPaymentDto.amount),
       paymentDate: new Date(createPaymentDto.paymentDate),
     });
-    return this.paymentsRepository.save(payment);
+    const savedPayment = await this.paymentsRepository.save(payment);
+
+    const project = await this.projectsRepository.findOne({ where: { id: projectId } });
+    if (project) {
+      const company = await this.companiesRepository.findOne({ where: { id: project.companyId } });
+      const adminManagerUsers = await this.usersRepository.find({
+        where: [{ role: UserRole.ADMIN }, { role: UserRole.MANAGER }],
+      });
+
+      const notification = await this.notificationsService.create({
+        userId: adminManagerUsers[0]?.id,
+        type: NotificationType.PAYMENT_RECEIVED,
+        title: 'Payment Received',
+        message: `Payment of ${createPaymentDto.amount} received for project "${project.projectName}"${company ? ` (${company.companyName})` : ''}`,
+        link: `/projects/${projectId}`,
+      });
+
+      for (const user of adminManagerUsers) {
+        await this.notificationsGateway.sendNotification(user.id, notification);
+      }
+    }
+
+    return savedPayment;
   }
 
   async findAllByProject(projectId: string, query: QueryPaymentDto): Promise<PaginatedResponseDto<Payment>> {
