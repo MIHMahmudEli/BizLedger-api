@@ -69,12 +69,12 @@ export class ReportsService {
     for (const pt of paymentTotals) {
       const amount = parseFloat(pt.totalPaid);
       paymentMap.set(pt.projectId, amount);
-      totalPaid += amount;
     }
 
     for (const project of projects) {
       const totalValue = parseFloat(project.totalValue);
       const projectPaid = paymentMap.get(project.id) || 0;
+      totalPaid += projectPaid;
       const status = calculatePaymentStatus(totalValue, projectPaid);
 
       switch (status) {
