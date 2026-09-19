@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsOptional, IsNumber, IsEnum, IsDateString, Min } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsNumber, IsEnum, IsDateString, Min, IsArray, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { ProjectStatus } from '../entities/project.entity.js';
 
@@ -37,4 +37,10 @@ export class CreateProjectDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @ApiPropertyOptional({ type: [String], description: 'Optional list of developer IDs to assign to the project' })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  developerIds?: string[];
 }

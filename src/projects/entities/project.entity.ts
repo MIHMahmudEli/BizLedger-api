@@ -5,7 +5,10 @@ import {
   CreateDateColumn,
   UpdateDateColumn,
   DeleteDateColumn,
+  ManyToMany,
+  JoinTable,
 } from 'typeorm';
+import { Developer } from '../../developers/entities/developer.entity.js';
 
 export enum ProjectStatus {
   PLANNED = 'PLANNED',
@@ -52,4 +55,12 @@ export class Project {
 
   @DeleteDateColumn()
   deletedAt: Date;
+
+  @ManyToMany(() => Developer, (developer) => developer.projects)
+  @JoinTable({
+    name: 'project_developers',
+    joinColumn: { name: 'projectId', referencedColumnName: 'id' },
+    inverseJoinColumn: { name: 'developerId', referencedColumnName: 'id' },
+  })
+  developers: Developer[];
 }

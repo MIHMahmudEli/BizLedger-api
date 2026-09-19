@@ -7,6 +7,7 @@ import { UsersModule } from './users/users.module.js';
 import { CompaniesModule } from './companies/companies.module.js';
 import { ContactsModule } from './contacts/contacts.module.js';
 import { ProjectsModule } from './projects/projects.module.js';
+import { DevelopersModule } from './developers/developers.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
 import { ReportsModule } from './reports/reports.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
@@ -34,6 +35,7 @@ import { RolesGuard } from './common/guards/roles.guard.js';
     CompaniesModule,
     ContactsModule,
     ProjectsModule,
+    DevelopersModule,
     PaymentsModule,
     ReportsModule,
     NotificationsModule,

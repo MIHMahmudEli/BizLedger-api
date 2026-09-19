@@ -21,6 +21,9 @@ import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
 import { UserRole } from '../users/entities/user.entity.js';
+import { CurrentUser } from '../common/decorators/current-user.decorator.js';
+import type { JwtPayload } from '../common/decorators/current-user.decorator.js';
+import { UpdateCredentialsDto } from './dto/update-credentials.dto.js';
 
 @ApiTags('Users')
 @ApiBearerAuth()
@@ -106,5 +109,33 @@ export class UsersController {
   async remove(@Param('id', ParseUUIDPipe) id: string) {
     await this.usersService.remove(id);
     return { message: 'User deleted successfully' };
+  }
+
+  @Patch('me/credentials')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update own credentials' })
+  @ApiResponse({ status: 200, description: 'Credentials updated successfully' })
+  async updateCredentials(
+    @CurrentUser() user: JwtPayload,
+    @Body() dto: UpdateCredentialsDto,
+  ) {
+    const updateData: any = {};
+    if (dto.name) updateData.name = dto.name;
+    if (dto.email) {
+      const existingUser = await this.usersService.findByEmail(dto.email);
+      if (existingUser && existingUser.id !== user.userId) {
+        throw new ConflictException('Email already in use');
+      }
+      updateData.email = dto.email;
+    }
+    if (dto.password) {
+      updateData.passwordHash = await bcrypt.hash(dto.password, 10);
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+      await this.usersService.update(user.userId, updateData);
+    }
+    
+    return { message: 'Credentials updated successfully' };
   }
 }

@@ -11,6 +11,7 @@ import { UserRole } from '../users/entities/user.entity.js';
 import { Payment } from '../payments/entities/payment.entity.js';
 import { Company } from '../companies/entities/company.entity.js';
 import { User } from '../users/entities/user.entity.js';
+import { Developer } from '../developers/entities/developer.entity.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import { NotificationsGateway } from '../notifications/notifications.gateway.js';
 import { NotificationType } from '../notifications/entities/notification.entity.js';
@@ -35,15 +36,29 @@ export class ProjectsService {
     private companiesRepository: Repository<Company>,
     @InjectRepository(User)
     private usersRepository: Repository<User>,
+    @InjectRepository(Developer)
+    private developersRepository: Repository<Developer>,
     private notificationsService: NotificationsService,
     private notificationsGateway: NotificationsGateway,
   ) {}
 
   async create(companyId: string, createProjectDto: CreateProjectDto): Promise<Project> {
+    const { developerIds, ...projectData } = createProjectDto;
+
+    let developers: Developer[] = [];
+    if (developerIds && developerIds.length > 0) {
+      const uniqueIds = [...new Set(developerIds)];
+      developers = await this.developersRepository.find({ where: { id: In(uniqueIds) } });
+      if (developers.length !== uniqueIds.length) {
+        throw new NotFoundException('One or more developers not found');
+      }
+    }
+
     const project = this.projectsRepository.create({
-      ...createProjectDto,
+      ...projectData,
       companyId,
       totalValue: String(createProjectDto.totalValue),
+      developers,
     });
     const savedProject = await this.projectsRepository.save(project);
 
@@ -104,6 +119,7 @@ export class ProjectsService {
     const skip = (page - 1) * limit;
 
     const qb = this.buildQuery(search, status, projectType, [companyId]);
+    qb.leftJoinAndSelect('project.developers', 'developer');
 
     qb.orderBy('project.createdAt', 'DESC');
 
@@ -138,7 +154,7 @@ export class ProjectsService {
   }
 
   async findOne(id: string): Promise<{ project: Project; financial: ProjectFinancialDto }> {
-    const project = await this.projectsRepository.findOne({ where: { id } });
+    const project = await this.projectsRepository.findOne({ where: { id }, relations: { developers: true } });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -147,8 +163,30 @@ export class ProjectsService {
     return { project, financial };
   }
 
+  async assignDevelopers(id: string, developerIds: string[], userRole: UserRole): Promise<Project> {
+    if (userRole === UserRole.STAFF) {
+      throw new ForbiddenException('Staff members cannot assign developers to projects');
+    }
+    const project = await this.projectsRepository.findOne({ where: { id }, relations: { developers: true } });
+    if (!project) {
+      throw new NotFoundException('Project not found');
+    }
+
+    const uniqueIds = [...new Set(developerIds)];
+    const developers = uniqueIds.length > 0
+      ? await this.developersRepository.find({ where: { id: In(uniqueIds) } })
+      : [];
+
+    if (developers.length !== uniqueIds.length) {
+      throw new NotFoundException('One or more developers not found');
+    }
+
+    project.developers = developers;
+    return this.projectsRepository.save(project);
+  }
+
   async findOneWithFinancial(id: string): Promise<Project & { financial: ProjectFinancialDto }> {
-    const project = await this.projectsRepository.findOne({ where: { id } });
+    const project = await this.projectsRepository.findOne({ where: { id }, relations: { developers: true } });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
@@ -161,18 +199,31 @@ export class ProjectsService {
     if (userRole === UserRole.STAFF) {
       throw new ForbiddenException('Staff members cannot update projects');
     }
-    const project = await this.projectsRepository.findOne({ where: { id } });
+    const project = await this.projectsRepository.findOne({ where: { id }, relations: { developers: true } });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
 
     const oldStatus = project.status;
-    const updateData: any = { ...updateProjectDto };
+    const { developerIds, ...restDto } = updateProjectDto;
+    const updateData: any = { ...restDto };
     if (updateProjectDto.totalValue !== undefined) {
       updateData.totalValue = String(updateProjectDto.totalValue);
     }
 
     Object.assign(project, updateData);
+
+    if (developerIds !== undefined) {
+      const uniqueIds = [...new Set(developerIds)];
+      const developers = uniqueIds.length > 0
+        ? await this.developersRepository.find({ where: { id: In(uniqueIds) } })
+        : [];
+      if (developers.length !== uniqueIds.length) {
+        throw new NotFoundException('One or more developers not found');
+      }
+      project.developers = developers;
+    }
+
     const savedProject = await this.projectsRepository.save(project);
 
     if (updateProjectDto.status && updateProjectDto.status !== oldStatus) {
@@ -254,6 +305,18 @@ export class ProjectsService {
       companies = await this.companiesRepository.find({ where: { id: In(companyIds) } });
     }
 
+    const projectIds = result.data.map((p) => p.id);
+    const developersByProject = new Map<string, Developer[]>();
+    if (projectIds.length > 0) {
+      const projectsWithDevelopers = await this.projectsRepository.find({
+        where: { id: In(projectIds) },
+        relations: { developers: true },
+      });
+      for (const p of projectsWithDevelopers) {
+        developersByProject.set(p.id, p.developers);
+      }
+    }
+
     const projectsWithFinancials = await Promise.all(
       result.data.map(async (project) => {
         const financial = await this.calculateFinancial(project.id);
@@ -264,6 +327,7 @@ export class ProjectsService {
           company: company
             ? { id: company.id, companyName: company.companyName, addressArea: company.addressArea }
             : null,
+          developers: developersByProject.get(project.id) ?? [],
         };
       }),
     );

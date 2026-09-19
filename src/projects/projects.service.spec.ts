@@ -3,6 +3,11 @@ import { ProjectsService, calculatePaymentStatus } from './projects.service.js';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import { Project } from './entities/project.entity.js';
 import { Payment } from '../payments/entities/payment.entity.js';
+import { Company } from '../companies/entities/company.entity.js';
+import { User } from '../users/entities/user.entity.js';
+import { Developer } from '../developers/entities/developer.entity.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
+import { NotificationsGateway } from '../notifications/notifications.gateway.js';
 import { vi } from 'vitest';
 
 describe('ProjectsService', () => {
@@ -26,12 +31,40 @@ describe('ProjectsService', () => {
     remove: vi.fn(),
   };
 
+  const mockCompaniesRepository = {
+    find: vi.fn(),
+    findOne: vi.fn(),
+  };
+
+  const mockUsersRepository = {
+    find: vi.fn().mockResolvedValue([]),
+    findOne: vi.fn(),
+  };
+
+  const mockDevelopersRepository = {
+    find: vi.fn(),
+    findOne: vi.fn(),
+  };
+
+  const mockNotificationsService = {
+    create: vi.fn(),
+  };
+
+  const mockNotificationsGateway = {
+    sendNotification: vi.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ProjectsService,
         { provide: getRepositoryToken(Project), useValue: mockProjectsRepository },
         { provide: getRepositoryToken(Payment), useValue: mockPaymentsRepository },
+        { provide: getRepositoryToken(Company), useValue: mockCompaniesRepository },
+        { provide: getRepositoryToken(User), useValue: mockUsersRepository },
+        { provide: getRepositoryToken(Developer), useValue: mockDevelopersRepository },
+        { provide: NotificationsService, useValue: mockNotificationsService },
+        { provide: NotificationsGateway, useValue: mockNotificationsGateway },
       ],
     }).compile();
 
@@ -72,6 +105,37 @@ describe('ProjectsService', () => {
 
       const result = await service.create('company-1', dto);
       expect(result.id).toBe('project-1');
+    });
+
+    it('should create a project and assign developers', async () => {
+      const mockDev = { id: 'dev-1', name: 'Alice' };
+      mockDevelopersRepository.find.mockResolvedValue([mockDev]);
+
+      const dto = {
+        projectName: 'Mobile App',
+        projectType: 'Mobile App',
+        totalValue: 25000,
+        developerIds: ['dev-1'],
+      };
+      mockProjectsRepository.create.mockReturnValue({ ...dto, companyId: 'company-1', totalValue: '25000', developers: [mockDev] });
+      mockProjectsRepository.save.mockResolvedValue({ id: 'project-2', ...dto, companyId: 'company-1', totalValue: '25000', developers: [mockDev] });
+
+      const result = await service.create('company-1', dto);
+      expect(result.id).toBe('project-2');
+      expect(mockDevelopersRepository.find).toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if any developer does not exist', async () => {
+      mockDevelopersRepository.find.mockResolvedValue([]);
+
+      const dto = {
+        projectName: 'Mobile App',
+        projectType: 'Mobile App',
+        totalValue: 25000,
+        developerIds: ['non-existent-id'],
+      };
+
+      await expect(service.create('company-1', dto)).rejects.toThrow();
     });
   });
 

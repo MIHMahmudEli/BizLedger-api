@@ -82,7 +82,7 @@ export class CompaniesService {
     }
 
     const contacts = await this.contactsRepository.find({ where: { companyId: id } });
-    const projects = await this.projectsRepository.find({ where: { companyId: id } });
+    const projects = await this.projectsRepository.find({ where: { companyId: id }, relations: { developers: true } });
 
     return { ...company, contacts, projects };
   }

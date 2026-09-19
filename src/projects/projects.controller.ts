@@ -17,6 +17,7 @@ import { ProjectsService } from './projects.service.js';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-project.dto.js';
 import { QueryProjectDto } from './dto/query-project.dto.js';
+import { AssignDevelopersDto } from './dto/assign-developers.dto.js';
 import { JwtAuthGuard } from '../common/guards/jwt-auth.guard.js';
 import { RolesGuard } from '../common/guards/roles.guard.js';
 import { Roles } from '../common/decorators/roles.decorator.js';
@@ -84,6 +85,20 @@ export class ProjectsController {
     @CurrentUser() user: JwtPayload,
   ) {
     const project = await this.projectsService.update(id, updateProjectDto, user.role as UserRole);
+    return { data: project };
+  }
+
+  @Patch('projects/:id/developers')
+  @Roles(UserRole.ADMIN, UserRole.MANAGER)
+  @ApiOperation({ summary: 'Assign the full set of developers to a project' })
+  @ApiResponse({ status: 200, description: 'Developers assigned successfully' })
+  @ApiResponse({ status: 404, description: 'Project or developer not found' })
+  async assignDevelopers(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() assignDevelopersDto: AssignDevelopersDto,
+    @CurrentUser() user: JwtPayload,
+  ) {
+    const project = await this.projectsService.assignDevelopers(id, assignDevelopersDto.developerIds, user.role as UserRole);
     return { data: project };
   }
 
