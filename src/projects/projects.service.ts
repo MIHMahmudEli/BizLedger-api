@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, SelectQueryBuilder } from 'typeorm';
+import { In, Repository, SelectQueryBuilder } from 'typeorm';
 import { Project, ProjectStatus } from './entities/project.entity.js';
 import { CreateProjectDto } from './dto/create-project.dto.js';
 import { UpdateProjectDto } from './dto/update-project.dto.js';
@@ -70,10 +70,25 @@ export class ProjectsService {
   }
 
   async findAll(query: QueryProjectDto): Promise<PaginatedResponseDto<Project>> {
-    const { page = 1, limit = 20, search, status, projectType, companyId, sortBy = 'createdAt' } = query;
+    const { page = 1, limit = 20, search, status, projectType, companyId, area, sortBy = 'createdAt' } = query;
     const skip = (page - 1) * limit;
 
-    const qb = this.buildQuery(search, status, projectType, companyId);
+    let companyIds: string[] | undefined;
+    if (companyId) companyIds = [companyId];
+    if (area) {
+      const matched = await this.companiesRepository
+        .createQueryBuilder('company')
+        .select('company.id', 'id')
+        .where('company.addressArea ILIKE :area', { area: `%${area}%` })
+        .getRawMany<{ id: string }>();
+      const areaIds = matched.map((m) => m.id);
+      companyIds = companyIds ? companyIds.filter((id) => areaIds.includes(id)) : areaIds;
+      if (companyIds.length === 0) {
+        return new PaginatedResponseDto([], 0, page, limit);
+      }
+    }
+
+    const qb = this.buildQuery(search, status, projectType, companyIds);
 
     const allowedSortFields = ['projectName', 'projectType', 'totalValue', 'status', 'createdAt', 'updatedAt'];
     const sortField = allowedSortFields.includes(sortBy) ? `project.${sortBy}` : 'project.createdAt';
@@ -88,7 +103,7 @@ export class ProjectsService {
     const { page = 1, limit = 20, search, status, projectType } = query;
     const skip = (page - 1) * limit;
 
-    const qb = this.buildQuery(search, status, projectType, companyId);
+    const qb = this.buildQuery(search, status, projectType, [companyId]);
 
     qb.orderBy('project.createdAt', 'DESC');
 
@@ -97,11 +112,11 @@ export class ProjectsService {
     return new PaginatedResponseDto(data, total, page, limit);
   }
 
-  private buildQuery(search?: string, status?: ProjectStatus, projectType?: string, companyId?: string): SelectQueryBuilder<Project> {
+  private buildQuery(search?: string, status?: ProjectStatus, projectType?: string, companyIds?: string[]): SelectQueryBuilder<Project> {
     const qb = this.projectsRepository.createQueryBuilder('project');
 
-    if (companyId) {
-      qb.where('project.companyId = :companyId', { companyId });
+    if (companyIds && companyIds.length > 0) {
+      qb.where('project.companyId IN (:...companyIds)', { companyIds });
     }
 
     if (status) {
@@ -233,10 +248,23 @@ export class ProjectsService {
   async findWithFinancials(query: QueryProjectDto): Promise<PaginatedResponseDto<any>> {
     const result = await this.findAll(query);
 
+    const companyIds = [...new Set(result.data.map((p) => p.companyId))];
+    let companies: Company[] = [];
+    if (companyIds.length > 0) {
+      companies = await this.companiesRepository.find({ where: { id: In(companyIds) } });
+    }
+
     const projectsWithFinancials = await Promise.all(
       result.data.map(async (project) => {
         const financial = await this.calculateFinancial(project.id);
-        return { ...project, financial };
+        const company = companies.find((c) => c.id === project.companyId);
+        return {
+          ...project,
+          financial,
+          company: company
+            ? { id: company.id, companyName: company.companyName, addressArea: company.addressArea }
+            : null,
+        };
       }),
     );
 

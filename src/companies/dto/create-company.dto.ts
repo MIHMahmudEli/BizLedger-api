@@ -26,4 +26,19 @@ export class CreateCompanyDto {
   @IsOptional()
   @IsString()
   website?: string;
+
+  @ApiPropertyOptional({ example: 'Rahim Uddin' })
+  @IsOptional()
+  @IsString()
+  contactName?: string;
+
+  @ApiPropertyOptional({ example: 'Manager' })
+  @IsOptional()
+  @IsString()
+  designation?: string;
+
+  @ApiPropertyOptional({ example: '+8801XXXXXXXXX' })
+  @IsOptional()
+  @IsString()
+  phone?: string;
 }

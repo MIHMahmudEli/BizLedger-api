@@ -24,6 +24,11 @@ export class QueryProjectDto extends PaginationDto {
   @IsUUID()
   companyId?: string;
 
+  @ApiPropertyOptional({ description: 'Filter by company area (addressArea)' })
+  @IsOptional()
+  @IsString()
+  area?: string;
+
   @ApiPropertyOptional({ enum: ['projectName', 'projectType', 'totalValue', 'status', 'createdAt'] })
   @IsOptional()
   @IsString()

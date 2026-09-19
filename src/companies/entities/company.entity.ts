@@ -25,6 +25,15 @@ export class Company {
   addressArea: string;
 
   @Column({ nullable: true })
+  contactName: string;
+
+  @Column({ nullable: true })
+  designation: string;
+
+  @Column({ nullable: true })
+  phone: string;
+
+  @Column({ nullable: true })
   website: string;
 
   @CreateDateColumn()

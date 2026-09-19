@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import { Company } from './entities/company.entity.js';
 import { Contact } from '../contacts/entities/contact.entity.js';
 import { Project } from '../projects/entities/project.entity.js';
@@ -34,7 +34,7 @@ export class CompaniesService {
 
     if (search) {
       qb.andWhere(
-        '(company.companyName ILIKE :search OR company.category ILIKE :search OR company.address ILIKE :search OR company.addressArea ILIKE :search OR company.website ILIKE :search)',
+        '(company.companyName ILIKE :search OR company.category ILIKE :search OR company.address ILIKE :search OR company.addressArea ILIKE :search OR company.website ILIKE :search OR company.contactName ILIKE :search OR company.designation ILIKE :search OR company.phone ILIKE :search)',
         { search: `%${search}%` },
       );
     }
@@ -53,7 +53,26 @@ export class CompaniesService {
 
     const [data, total] = await qb.skip(skip).take(limit).getManyAndCount();
 
-    return new PaginatedResponseDto(data, total, page, limit);
+    // Attach owner-priority primary contact for the list view:
+    // contact with designation "Owner" first, otherwise the first contact.
+    const companyIds = data.map((c) => c.id);
+    let contacts: Contact[] = [];
+    if (companyIds.length > 0) {
+      contacts = await this.contactsRepository.find({
+        where: { companyId: In(companyIds) },
+        order: { createdAt: 'ASC' },
+      });
+    }
+    const dataWithPrimaryContact = data.map((company) => {
+      const companyContacts = contacts.filter((ct) => ct.companyId === company.id);
+      const primaryContact =
+        companyContacts.find((ct) => ct.designation?.toLowerCase() === 'owner') ??
+        companyContacts[0] ??
+        null;
+      return { ...company, primaryContact };
+    });
+
+    return new PaginatedResponseDto(dataWithPrimaryContact, total, page, limit);
   }
 
   async findOne(id: string): Promise<any> {
